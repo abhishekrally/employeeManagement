@@ -22,8 +22,8 @@ mongoose
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.error("MongoDB Connection Error:", err));
 
-// Start server
-const port = process.env.PORT || 7000;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+// Use Render's assigned port
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
