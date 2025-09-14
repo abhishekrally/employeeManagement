@@ -1,12 +1,12 @@
 import User from "../model/userModel.js";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-
 import mongoose from "mongoose";
 
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// ✅ Register User
 export const create = async (req, res) => {
   try {
     const { name, email, role, ID, password } = req.body;
@@ -24,6 +24,8 @@ export const create = async (req, res) => {
     res.status(500).json({ errorMessage: error.message });
   }
 };
+
+// ✅ Login
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -32,6 +34,7 @@ export const login = async (req, res) => {
     if (!user || !(await user.comparePassword(password))) {
       return res.status(400).json({ message: "Invalid credentials." });
     }
+
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: "1h" });
 
     res.status(200).json({ message: "Login successful", token, role: user.role });
@@ -39,6 +42,8 @@ export const login = async (req, res) => {
     res.status(500).json({ errorMessage: error.message });
   }
 };
+
+// ✅ Add Task
 export const updateTask = async (req, res) => {
   try {
     const { ID, title, description, date, category, status, priority } = req.body;
@@ -51,8 +56,9 @@ export const updateTask = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
     const newTask = {
-      id: new mongoose.Types.ObjectId(),
+      _id: new mongoose.Types.ObjectId(),
       title,
       description,
       date,
@@ -60,8 +66,9 @@ export const updateTask = async (req, res) => {
       status,
       priority,
     };
+
     const updatedUser = await User.findOneAndUpdate(
-      { ID: ID },
+      { ID },
       { $push: { tasks: newTask } },
       { new: true }
     );
@@ -69,14 +76,15 @@ export const updateTask = async (req, res) => {
     if (!updatedUser) {
       return res.status(500).json({ message: "Failed to update user tasks." });
     }
-    res.status(200).json({ message: "Task added successfully!", updatedUser });
 
+    res.status(200).json({ message: "Task added successfully!", updatedUser });
   } catch (error) {
     console.error("❌ Error updating task:", error);
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
 
+// ✅ Fetch All Tasks
 export const fetchAllTasks = async (req, res) => {
   try {
     const users = await User.find({}, { tasks: 1, name: 1, ID: 1, _id: 0 });
@@ -90,7 +98,7 @@ export const fetchAllTasks = async (req, res) => {
   }
 };
 
-// Delete task by taskId
+// ✅ Delete Task
 export const deleteTask = async (req, res) => {
   const { userID, taskID } = req.params;
 
@@ -112,30 +120,52 @@ export const deleteTask = async (req, res) => {
   }
 };
 
+// ✅ Fetch Tasks by User (separate pending & completed)
 export const fetchTaskUser = async (req, res) => {
   try {
     const { id } = req.body;
     if (!id) return res.status(400).json({ message: "User ID is required" });
-    const user = await User.findOne({ _id: id }, { ID: 1, name: 1, tasks: 1 });
+
+    const user = await User.findById(id, { ID: 1, name: 1, tasks: 1 });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json(user.tasks || []);
+
+    // Separate tasks
+    const pendingTasks = user.tasks.filter((task) => task.status === "Pending");
+    const completedTasks = user.tasks.filter((task) => task.status === "Completed");
+
+    res.json({ pendingTasks, completedTasks });
   } catch (err) {
     res.status(500).json({ message: "Error fetching tasks", error: err.message });
   }
 };
 
+// ✅ Update Task Status
 export const updatedTaskStatus = async (req, res) => {
-  const { id, status } = req.body;
+  const { userId, taskId, status } = req.body;
+
+  if (!userId || !taskId || !status) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
 
   try {
-    const updatedTask = await Task.findByIdAndUpdate(id, { status }, { new: true });
-    if (!updatedTask) return res.status(404).json({ message: "Task not found" });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-    res.json({ message: "Task updated successfully", updatedTask });
+    const task = user.tasks.id(taskId);
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    task.status = status;
+    await user.save();
+
+    res.json({ message: "✅ Task status updated successfully", task });
   } catch (error) {
-    console.error("Error updating task:", error);
+    console.error("❌ Error updating task:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
